@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4f4f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c0c0e" media="(prefers-color-scheme: dark)" />
+    <!-- The page may only load from and talk to its own origin: no third-party scripts, no outside requests. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>PureSwitch</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="top">
+        <h1>Outlets</h1>
+        <button type="button" id="editBtn" class="text-btn">Edit</button>
+      </header>
+
+      <div id="allBar" class="all-bar" hidden>
+        <button type="button" id="allOnBtn" class="all-btn all-on">All on</button>
+        <button type="button" id="allOffBtn" class="all-btn all-off">All off</button>
+      </div>
+
+      <ul id="list" class="list"></ul>
+
+      <p id="empty" class="empty" hidden>No outlets yet.</p>
+
+      <button type="button" id="addBtn" class="add-btn" hidden>+ Add outlet</button>
+
+      <p id="demoNote" class="demo-note" hidden>Demo mode: not connected to real outlets.</p>
+    </main>
+
+    <dialog id="addDialog" class="sheet">
+      <section data-view="choose">
+        <h2>Add outlet</h2>
+        <div class="choices">
+          <button type="button" class="choice" id="scanBtn">
+            <span class="choice-title">Scan network</span>
+            <span class="hint">Find outlets on your Wi-Fi</span>
+          </button>
+          <button type="button" class="choice" id="importBtn">
+            <span class="choice-title">Import key file</span>
+            <span class="hint">Names and keys from a tinytuya devices.json</span>
+          </button>
+          <button type="button" class="choice" id="manualBtn">
+            <span class="choice-title">Enter manually</span>
+            <span class="hint">Type in the details yourself</span>
+          </button>
+        </div>
+        <div class="sheet-actions">
+          <span class="spacer"></span>
+          <button type="button" data-close>Cancel</button>
+        </div>
+      </section>
+
+      <section data-view="scan" hidden>
+        <h2>Scan network</h2>
+        <p id="scanStatus" class="hint scan-status"></p>
+        <ul id="scanList" class="found"></ul>
+        <div class="sheet-actions">
+          <button type="button" id="scanAgainBtn">Scan again</button>
+          <span class="spacer"></span>
+          <button type="button" data-close>Done</button>
+        </div>
+      </section>
+
+      <section data-view="info" hidden>
+        <h2 id="infoTitle"></h2>
+        <p id="infoText" class="hint info-text"></p>
+        <div class="sheet-actions">
+          <span class="spacer"></span>
+          <button type="button" class="primary" data-close>OK</button>
+        </div>
+      </section>
+
+      <input type="file" id="importFile" accept=".json,application/json" hidden />
+    </dialog>
+
+    <dialog id="editDialog" class="sheet">
+      <form method="dialog" id="editForm">
+        <h2 id="editTitle">Outlet</h2>
+
+        <label>
+          Name
+          <input id="fName" type="text" required autocomplete="off" placeholder="Desk lamp" />
+        </label>
+
+        <label class="switch-row">
+          <span>
+            <span class="switch-title">Ask before turning off</span>
+            <span class="hint">For things that shouldn't lose power by accident, like a PC or 3D printer.</span>
+          </span>
+          <input id="fSafety" type="checkbox" role="switch" />
+        </label>
+
+        <details id="fConnection">
+          <summary>Connection</summary>
+          <p class="hint">Local network only. PureSwitch never connects to the internet.</p>
+          <label>
+            IP address
+            <input id="fIp" type="text" inputmode="decimal" autocomplete="off" placeholder="192.168.1.42" />
+          </label>
+          <label>
+            Device ID
+            <input id="fDevId" type="text" autocomplete="off" />
+          </label>
+          <label>
+            Local key
+            <input id="fKey" type="password" autocomplete="off" />
+          </label>
+        </details>
+
+        <div class="sheet-actions">
+          <button type="button" id="deleteBtn" class="danger">Remove</button>
+          <span class="spacer"></span>
+          <button type="button" id="cancelBtn">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirmDialog" class="sheet confirm">
+      <h2 id="confirmTitle"></h2>
+      <p id="confirmText" class="hint"></p>
+      <div class="sheet-actions">
+        <span class="spacer"></span>
+        <button type="button" id="confirmCancel">Cancel</button>
+        <button type="button" id="confirmAlt" hidden></button>
+        <button type="button" id="confirmOk" class="danger-fill"></button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

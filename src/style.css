@@ -1,0 +1,567 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --text: #18181b;
+  --muted: #71717a;
+  --line: #e4e4e7;
+  --on: #16a34a;
+  --on-text: #ffffff;
+  --danger: #dc2626;
+  --radius: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c0c0e;
+    --surface: #1c1c20;
+    --text: #f4f4f5;
+    --muted: #8b8b94;
+    --line: #2a2a30;
+    --on: #22c55e;
+    --on-text: #052e12;
+    --danger: #f87171;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: max(24px, env(safe-area-inset-top)) 16px 40px;
+}
+
+/* ---------- Header ---------- */
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.text-btn {
+  background: none;
+  border: 0;
+  padding: 8px 4px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.text-btn:hover {
+  color: var(--text);
+}
+
+/* ---------- All on / All off ---------- */
+
+.all-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-weight: 600;
+  transition: opacity 150ms, transform 80ms;
+}
+
+.all-btn::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.all-on::before {
+  background: var(--on);
+}
+
+.all-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.all-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.all-btn:focus-visible {
+  outline: 2px solid var(--on);
+  outline-offset: 2px;
+}
+
+/* ---------- Outlet list ---------- */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.outlet {
+  width: 100%;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-align: left;
+  transition: background-color 150ms, border-color 150ms, color 150ms, transform 80ms;
+}
+
+.outlet:active {
+  transform: scale(0.985);
+}
+
+.outlet .name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.outlet .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lock {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.6;
+}
+
+.outlet .state {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.outlet.on {
+  background: var(--on);
+  border-color: var(--on);
+  color: var(--on-text);
+}
+
+.outlet.on .state {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.outlet.busy {
+  opacity: 0.7;
+}
+
+.outlet.error .state {
+  color: var(--danger);
+  opacity: 1;
+}
+
+.outlet.on.error .state {
+  color: inherit;
+}
+
+/* In edit mode every row looks the same so it's clear taps open the editor */
+.editing .outlet,
+.editing .outlet.on {
+  background: var(--surface);
+  border-color: var(--line);
+  border-style: dashed;
+  color: var(--text);
+}
+
+.editing .outlet .state {
+  color: var(--muted);
+}
+
+.outlet:focus-visible,
+.add-btn:focus-visible,
+.text-btn:focus-visible {
+  outline: 2px solid var(--on);
+  outline-offset: 2px;
+}
+
+.empty {
+  margin: 40px 0 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.add-btn {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 56px;
+  background: none;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.add-btn:hover {
+  color: var(--text);
+}
+
+.demo-note {
+  margin: 28px 0 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---------- Add sheet ---------- */
+
+.choices {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.choice {
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.choice:hover {
+  border-color: var(--muted);
+}
+
+.choice-title {
+  display: block;
+  font-weight: 600;
+}
+
+.scan-status {
+  margin: -8px 0 12px;
+  font-size: 0.9rem;
+}
+
+.scan-status.searching::after {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 8px;
+  vertical-align: -2px;
+  border: 2px solid var(--line);
+  border-top-color: var(--on);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.found {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.found li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.found-info {
+  min-width: 0;
+}
+
+.found-title {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.found button {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 500;
+}
+
+.info-text {
+  margin: -8px 0 16px;
+  font-size: 0.9rem;
+}
+
+.sheet-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- Edit sheet ---------- */
+
+.sheet {
+  width: min(440px, calc(100% - 32px));
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sheet::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.sheet h2 {
+  margin: 0 0 18px;
+  font-size: 1.2rem;
+}
+
+.sheet label {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.sheet input:not([type='checkbox']) {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 11px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.sheet input:focus {
+  outline: 2px solid var(--on);
+  outline-offset: -1px;
+}
+
+.sheet input:invalid:not(:focus):not(:placeholder-shown) {
+  border-color: var(--danger);
+}
+
+.hint {
+  display: block;
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.sheet details .hint {
+  margin: 0 0 12px;
+}
+
+/* Safety switch */
+.sheet .switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  margin-bottom: 8px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.switch-title {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.switch-row input {
+  appearance: none;
+  flex-shrink: 0;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--line);
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.switch-row input::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform 150ms;
+}
+
+.switch-row input:checked {
+  background: var(--on);
+}
+
+.switch-row input:checked::after {
+  transform: translateX(18px);
+}
+
+.switch-row input:focus-visible {
+  outline: 2px solid var(--on);
+  outline-offset: 2px;
+}
+
+/* Confirm sheet */
+.confirm {
+  width: min(380px, calc(100% - 32px));
+}
+
+.confirm h2 {
+  margin-bottom: 8px;
+}
+
+.confirm .hint {
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+/* Three choices don't fit side by side on a phone: stack them, main action on top */
+.confirm.stacked .sheet-actions {
+  flex-direction: column-reverse;
+  align-items: stretch;
+}
+
+.confirm.stacked .spacer {
+  display: none;
+}
+
+.sheet-actions .danger-fill {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.sheet details {
+  margin-bottom: 14px;
+}
+
+.sheet summary {
+  cursor: pointer;
+  padding: 4px 0 12px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sheet-actions .spacer {
+  flex: 1;
+}
+
+.sheet-actions button {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: none;
+  font-weight: 500;
+}
+
+.sheet-actions .primary {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.sheet-actions .danger {
+  border-color: transparent;
+  padding-left: 0;
+  color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outlet,
+  .switch-row input,
+  .switch-row input::after {
+    transition: none;
+  }
+  .scan-status.searching::after {
+    animation-duration: 2.4s;
+  }
+}
