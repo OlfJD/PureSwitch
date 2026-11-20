@@ -147,6 +147,20 @@ function showError(outlet, message) {
   }, 4000);
 }
 
+/**
+ * Asks the outlet at `ip` for its state. Only the real plug can answer, because the reply has to
+ * be encrypted or signed with its local key (the phone side rejects anything else). On success
+ * the outlet's address, state and protocol are updated and marked as checked.
+ */
+async function verifyAddress(outlet, ip, version) {
+  const result = await getPower({ ...outlet, ip, version: version ?? outlet.version });
+  outlet.ip = ip;
+  outlet.checkedIp = ip;
+  outlet.isOn = result.on;
+  if (result.version) outlet.version = result.version;
+  return result;
+}
+
 /** Switch one outlet, showing "…" while it works and an error if it fails. */
 async function switchOutlet(outlet, target) {
   if (busy.has(outlet.id)) return;
@@ -154,6 +168,9 @@ async function switchOutlet(outlet, target) {
   errors.delete(outlet.id);
   render();
   try {
+    // Never send a switch command to an address that hasn't proved it's the real outlet.
+    // (Older plugs accept a recorded command again later, so it mustn't reach anyone else.)
+    if (!isDemo && outlet.checkedIp !== outlet.ip) await verifyAddress(outlet, outlet.ip);
     const { version } = await setPower(outlet, target);
     outlet.isOn = target;
     if (version) outlet.version = version; // remember which protocol worked
@@ -187,9 +204,7 @@ async function refreshAll() {
       .filter((o) => isReady(o) && !busy.has(o.id))
       .map(async (o) => {
         try {
-          const { on, version } = await getPower(o);
-          o.isOn = on;
-          if (version) o.version = version;
+          await verifyAddress(o, o.ip);
           errors.delete(o.id);
         } catch (err) {
           showError(o, err?.message || 'Offline');
@@ -331,15 +346,34 @@ async function runScan() {
     return;
   }
 
-  // Outlets we already know: quietly refresh their address (routers hand out new ones).
+  // Outlets we already know may have a new address (routers hand out new ones). Anyone on the
+  // Wi-Fi can send a fake announcement, so an outlet that has a key only moves to the new address
+  // once the device there proves it has that key. Without a key there's nothing to protect yet,
+  // and switching checks the address first anyway (see switchOutlet).
+  const unconfirmed = new Set();
   let changed = false;
-  for (const d of found) {
-    const known = outlets.find((o) => o.devId === d.devId);
-    if (known && (known.ip !== d.ip || (d.version && known.version !== d.version))) {
-      known.ip = d.ip;
-      if (d.version) known.version = d.version;
-      changed = true;
-    }
+  await Promise.all(
+    found.map(async (d) => {
+      const known = outlets.find((o) => o.devId === d.devId);
+      if (!known || known.ip === d.ip || busy.has(known.id)) return;
+      if (isDemo || !hasKey(known)) {
+        known.ip = d.ip;
+        if (d.version) known.version = d.version;
+        changed = true;
+        return;
+      }
+      try {
+        // Keep the protocol we already know works, so a fake can't push us to an older one.
+        await verifyAddress(known, d.ip, known.version || d.version);
+        changed = true;
+      } catch {
+        unconfirmed.add(d.devId);
+      }
+    })
+  );
+  if (run !== scanRun) {
+    if (changed) save();
+    return;
   }
   if (changed) {
     save();
@@ -347,10 +381,10 @@ async function runScan() {
   }
 
   scanStatus.textContent = `Found ${found.length} outlet${found.length === 1 ? '' : 's'}.`;
-  scanList.replaceChildren(...found.map(foundRow));
+  scanList.replaceChildren(...found.map((d) => foundRow(d, unconfirmed.has(d.devId))));
 }
 
-function foundRow(d) {
+function foundRow(d, unconfirmed = false) {
   const known = outlets.find((o) => o.devId === d.devId);
   const li = document.createElement('li');
 
@@ -368,7 +402,8 @@ function foundRow(d) {
   if (known) {
     const added = document.createElement('span');
     added.className = 'hint';
-    added.textContent = 'Added';
+    added.textContent = unconfirmed ? 'Address not confirmed' : 'Added';
+    if (unconfirmed) added.title = `Kept ${known.ip}: the device at ${d.ip} didn't prove it's this outlet.`;
     li.append(added);
   } else {
     const btn = document.createElement('button');
@@ -432,6 +467,7 @@ async function importDevices(list) {
 
     if (known) {
       await storeKey(known, d.key);
+      known.checkedIp = ''; // a new key has to be proven again
       if (ip) known.ip = ip;
       if (version) known.version = version;
       updated++;
@@ -532,7 +568,10 @@ form.addEventListener('submit', async () => {
   let outlet = current;
   if (outlet) {
     // A different device ID or address may mean a different protocol version
-    if (outlet.devId !== fields.devId || outlet.ip !== fields.ip) outlet.version = '';
+    if (outlet.devId !== fields.devId || outlet.ip !== fields.ip) {
+      outlet.version = '';
+      outlet.checkedIp = '';
+    }
     Object.assign(outlet, fields);
   } else {
     outlet = { id: newId(), isOn: false, version: draft.version ?? '', ...fields };
@@ -545,6 +584,7 @@ form.addEventListener('submit', async () => {
   if (key) {
     try {
       await storeKey(outlet, key);
+      outlet.checkedIp = ''; // a new key has to be proven again
       save();
     } catch {
       showError(outlet, 'Key not saved');

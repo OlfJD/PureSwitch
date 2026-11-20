@@ -1,5 +1,37 @@
 # PureSwitch – Devlog
 
+## 2026-11-20 – Fake devices on the Wi-Fi can't take over an outlet
+
+### The problem
+Scanning used to update a saved outlet's address quietly from whatever announced itself. Those
+announcements are encrypted with a key that is the same for every Tuya device, so anyone on the
+Wi-Fi could fake one. The app would then send that outlet's commands to the fake device. That
+cut off the real outlet, and an older (3.3) outlet could be switched later by sending a recorded
+command again.
+
+### Fixed
+- **Replies must prove the key** (`TuyaDevice.java`): a status reply only counts if it was
+  decrypted or signed with the outlet's local key. Plain-text replies are rejected as
+  "Not trusted".
+- **Addresses are checked before they're used** (`main.js`, `verifyAddress`): every outlet
+  remembers the address where it last proved its key (`checkedIp`). Before the first switch
+  command to a new address, the app asks that device for its state, and switches only if the
+  reply proves the key. A changed address, device ID or key has to be proven again.
+- **Scanning** only moves a saved outlet to a new address after the device there proves its key.
+  It also keeps the protocol version that already works, so a fake can't force an older one. If
+  the check fails, the old address is kept and the scan list shows "Address not confirmed".
+- **Browser demo no longer stores keys.** It only remembers that one was entered (`demoKey`).
+  Keys saved by older demo versions are removed from browser storage on startup.
+
+### Still true
+- With 3.3 outlets, someone who can see the Wi-Fi traffic between phone and plug could record a
+  real reply and send it again. On normal home Wi-Fi other devices can't see that traffic, and
+  3.4/3.5 outlets aren't affected.
+
+### Not yet verified
+- Demo mode was checked in the browser (scan, switch, old-key cleanup). The Java changes haven't
+  been compiled yet: there is no Java/Android SDK on this PC.
+
 ## 2026-11-08 – Android app (Capacitor) + real LAN control
 
 ### Setup

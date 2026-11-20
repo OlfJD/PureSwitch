@@ -3,7 +3,8 @@
 // In the Android app, the native "TuyaLan" plugin (android/app/src/main/java/.../tuya)
 // does the network work and keeps local keys encrypted in the Android Keystore.
 // In a normal browser there is no plugin, so a demo backend stands in: it pretends
-// to find a few outlets, every switch "succeeds", and keys live on the outlet object.
+// to find a few outlets and every switch "succeeds". The browser can't protect keys, so the
+// demo never stores them - it only remembers that one was entered (`demoKey`).
 
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
@@ -29,11 +30,22 @@ export function isLocalIPv4(value) {
  * encrypted vault. Returns true if outlets changed and should be saved.
  */
 export async function init(outlets) {
-  if (!native) return false;
   let changed = false;
+  if (!native) {
+    // Older demo versions saved real keys in browser storage: drop them.
+    for (const o of outlets) {
+      if (!('localKey' in o)) continue;
+      if (o.localKey) o.demoKey = true;
+      delete o.localKey;
+      changed = true;
+    }
+    return changed;
+  }
   for (const o of outlets) {
     if (!o.localKey) continue;
-    await native.saveKey({ id: o.id, localKey: o.localKey });
+    if (typeof o.localKey === 'string' && o.localKey.length === 16) {
+      await native.saveKey({ id: o.id, localKey: o.localKey });
+    }
     delete o.localKey;
     changed = true;
   }
@@ -43,12 +55,12 @@ export async function init(outlets) {
 }
 
 export function hasKey(outlet) {
-  return native ? keyIds.has(outlet.id) : !!outlet.localKey;
+  return native ? keyIds.has(outlet.id) : !!outlet.demoKey;
 }
 
 export async function storeKey(outlet, localKey) {
   if (!native) {
-    outlet.localKey = localKey;
+    outlet.demoKey = true; // the key itself is thrown away
     return;
   }
   await native.saveKey({ id: outlet.id, localKey });
@@ -56,7 +68,10 @@ export async function storeKey(outlet, localKey) {
 }
 
 export async function forgetKey(outlet) {
-  if (!native) return;
+  if (!native) {
+    delete outlet.demoKey;
+    return;
+  }
   await native.deleteKey({ id: outlet.id });
   keyIds.delete(outlet.id);
 }

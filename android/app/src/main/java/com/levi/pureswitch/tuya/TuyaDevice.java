@@ -209,6 +209,10 @@ final class TuyaDevice implements Closeable {
             }
             send(cmd, body);
             Message reply = readUntil(cmd, STATUS);
+            // Only believe a reply that proves it knows the local key. A fake device on the
+            // Wi-Fi could otherwise answer in plain text. The app relies on this check before it
+            // trusts a new address for an outlet (see src/main.js, verifyAddress).
+            if (!reply.authed) throw new TuyaException("Not trusted");
             JSONObject json = new JSONObject(new String(reply.data, StandardCharsets.UTF_8));
             JSONObject dps = json.optJSONObject("dps");
             if (dps == null && json.optJSONObject("data") != null) dps = json.getJSONObject("data").optJSONObject("dps");
@@ -225,6 +229,8 @@ final class TuyaDevice implements Closeable {
         int cmd;
         int retcode;
         byte[] data;
+        /** True if the message was signed or encrypted with our key (so it came from the real plug). */
+        boolean authed;
     }
 
     private void send(int cmd, byte[] plain) throws IOException {
@@ -303,9 +309,11 @@ final class TuyaDevice implements Closeable {
             }
             if (payload.length == 0 || payload.length % 16 != 0 || payload[0] == '{') {
                 m.data = payload; // empty ack or plain-text message
+                m.authed = hmacTail; // 3.4: the HMAC above already proved the key
             } else {
                 try {
                     m.data = stripVersion(aesEcb(Cipher.DECRYPT_MODE, currentKey(), payload, true));
+                    m.authed = true;
                 } catch (GeneralSecurityException e) {
                     throw new TuyaException("Wrong key");
                 }
@@ -337,6 +345,7 @@ final class TuyaDevice implements Closeable {
                 plain = Arrays.copyOfRange(plain, 4, plain.length);
             }
             m.data = stripVersion(plain);
+            m.authed = true; // AES-GCM tag checked
             return m;
         }
 
