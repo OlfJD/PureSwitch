@@ -78,7 +78,17 @@ export async function forgetKey(outlet) {
 
 /** Can this outlet actually be switched? (Demo mode can always "switch".) */
 export function isReady(outlet) {
-  return isDemo || !!(outlet.ip && outlet.devId && hasKey(outlet));
+  return missing(outlet).length === 0;
+}
+
+/** What this outlet still needs before it can be switched: any of 'ip', 'devId', 'key'. */
+export function missing(outlet) {
+  if (isDemo) return [];
+  const needs = [];
+  if (!outlet.ip) needs.push('ip');
+  if (!outlet.devId) needs.push('devId');
+  if (!hasKey(outlet)) needs.push('key');
+  return needs;
 }
 
 /**

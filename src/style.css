@@ -517,6 +517,25 @@ h1 {
   margin-bottom: 14px;
 }
 
+/* "Can't be switched yet" notice in the outlet editor */
+.missing {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--danger);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.missing p {
+  margin: 0 0 10px;
+}
+
+.missing button {
+  padding: 8px 14px;
+  border-radius: 10px;
+}
+
 .sheet summary {
   cursor: pointer;
   padding: 4px 0 12px;

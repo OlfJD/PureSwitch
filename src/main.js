@@ -8,6 +8,7 @@ import {
   isDemo,
   isLocalIPv4,
   isReady,
+  missing,
   setPower,
   storeKey,
 } from './devices.js';
@@ -86,9 +87,11 @@ const LOCK_ICON =
 
 function stateText(o) {
   if (editing) return 'Edit';
-  if (!isReady(o)) return 'Set up';
   if (busy.has(o.id)) return '…';
   if (errors.has(o.id)) return errors.get(o.id).message;
+  const needs = missing(o);
+  if (needs.length === 1 && needs[0] === 'key') return 'Needs key';
+  if (needs.length) return 'Set up';
   return o.isOn ? 'On' : 'Off';
 }
 
@@ -381,6 +384,14 @@ async function runScan() {
   }
 
   scanStatus.textContent = `Found ${found.length} outlet${found.length === 1 ? '' : 's'}.`;
+  const needKey = found.some((d) => {
+    const known = outlets.find((o) => o.devId === d.devId);
+    return !isDemo && (!known || !hasKey(known));
+  });
+  if (needKey) {
+    scanStatus.textContent +=
+      " To switch them, each also needs its local key: a scan can't find it. Use Import key file.";
+  }
   scanList.replaceChildren(...found.map((d) => foundRow(d, unconfirmed.has(d.devId))));
 }
 
@@ -551,12 +562,39 @@ function openEditor(outlet, found = {}) {
   fKey.placeholder = keySaved ? 'Saved (leave empty to keep)' : '16 characters';
   // Open "Connection" when something there still needs filling in
   fConnection.open = !isDemo && !keySaved;
+  showMissing(outlet ?? { ...found, id: '' });
   checkIp();
   checkKey();
   deleteBtn.hidden = !outlet;
   dialog.showModal();
   fName.focus();
 }
+
+/** Says in the editor why this outlet can't be switched yet, so saving doesn't feel like a no-op. */
+const fMissing = document.getElementById('fMissing');
+const fMissingText = document.getElementById('fMissingText');
+
+function showMissing(outlet) {
+  const needs = missing(outlet);
+  fMissing.hidden = needs.length === 0;
+  if (!needs.length) return;
+  if (needs.includes('key')) {
+    const also = needs.length > 1 ? ' It also needs its IP address and device ID (a scan fills those in).' : '';
+    fMissingText.textContent =
+      "This outlet can't be switched yet: it needs its local key. Outlets don't share their key over " +
+      'Wi-Fi, so a scan can\'t find it. Import your tinytuya devices.json, or paste the key under ' +
+      `Connection.${also}`;
+  } else {
+    fMissingText.textContent =
+      "This outlet can't be switched yet: it needs its IP address and device ID. Use Scan network to fill them in.";
+  }
+}
+
+document.getElementById('fMissingImport').addEventListener('click', () => {
+  dialog.close();
+  importFile.value = '';
+  importFile.click();
+});
 
 form.addEventListener('submit', async () => {
   const fields = {

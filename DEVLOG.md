@@ -1,5 +1,24 @@
 # PureSwitch – Devlog
 
+## 2026-11-21 – Say why an outlet can't be switched
+
+### The problem
+On the phone, scanned outlets kept showing "Set up". Tapping one opened the editor, and saving
+changed nothing, so the next tap opened the editor again. The cause: a scan only finds an outlet's
+address and device ID. Outlets never send their local key over Wi-Fi, and without the key the app
+can't switch them. Nothing on screen said so.
+
+### Fixed
+- A row that only lacks its key now says **Needs key** instead of "Set up" (`devices.js`,
+  `missing()`).
+- The editor shows a note explaining what's missing, with an **Import key file** button.
+- The scan result says new outlets also need their key from Import key file.
+- Errors such as "Key not saved" now show on rows that aren't set up yet. Before, "Set up" hid them.
+
+### Not yet verified
+- Built for the web only. The APK wasn't rebuilt: this PC has no Android SDK. The note doesn't
+  show in demo mode, so it hasn't been seen on screen yet.
+
 ## 2026-11-20 – Fake devices on the Wi-Fi can't take over an outlet
 
 ### The problem
