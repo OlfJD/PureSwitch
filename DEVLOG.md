@@ -1,5 +1,35 @@
 # PureSwitch – Devlog
 
+## 2026-11-23 – Why outlets need a key, and three ways to get it
+
+The goal: **scan → save → tap**, nothing else.
+
+### Why a scan isn't enough
+Tuya / Smart Life outlets only accept on/off commands encrypted with their own secret, the
+**local key**. The manufacturer builds this in; PureSwitch didn't add it. A scan can see that an
+outlet exists (address and device ID), but the outlet never sends its key over Wi-Fi. If it did,
+anyone on the network could switch it. Only Tuya's cloud knows the key: it gave the key to the
+outlet when it was paired in Smart Life. So the key has to come from somewhere once.
+
+### Options (simplest for the user first)
+1. **One-time "Connect Smart Life" step in the app (recommended).** The app shows a QR code, you
+   scan it with the Smart Life app, and PureSwitch fetches all keys at once. Home Assistant's Tuya
+   integration uses the same method; it needs no developer account and no tinytuya. After that:
+   scan, save, tap, all on the home network.
+   - Catch: that one step talks to Tuya's servers, so the app is no longer "local network only,
+     never online". It's online only while connecting, and the keys stay encrypted on the phone.
+   - Has to be built and tested at home with the real outlets.
+2. **Keep the app 100 % offline and use tinytuya once on a PC.** The app stays as it is: run the
+   tinytuya wizard (needs a free Tuya developer account), then import `devices.json`. Steps are in
+   `PHONE_SETUP.md`, section 3. This is the part that's currently too complicated.
+3. **Different outlets, e.g. Shelly plugs.** Made for local control: no keys, no cloud. The app
+   could find and switch them with a tap, with much simpler code. Requires buying new outlets.
+
+### Status
+- The new version ("Needs key" + import note) is installed on the phone and runs. It has no keys
+  saved yet (`listKeys` returns none), so no outlet can be switched.
+- Not decided yet which option to build. Option 1 is recommended.
+
 ## 2026-11-21 – Say why an outlet can't be switched
 
 ### The problem

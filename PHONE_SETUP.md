@@ -51,6 +51,9 @@ section 2 (via cable with `adb install -r <apk>`, or by copying the file to the 
 
 ## 3. Getting the outlets' local keys (once)
 
+*Why keys at all, and simpler alternatives to the steps below: see the devlog entry
+"2026-11-23 – Why outlets need a key, and three ways to get it" in `DEVLOG.md`.*
+
 Outlets only accept commands encrypted with their own local key. The easiest way to get the keys
 is **tinytuya** on the PC:
 
