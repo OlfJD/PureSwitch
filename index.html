@@ -38,6 +38,10 @@
       <section data-view="choose">
         <h2>Add outlet</h2>
         <div class="choices">
+          <button type="button" class="choice choice-main" id="cloudBtn">
+            <span class="choice-title">Connect Smart Life</span>
+            <span class="hint">Adds all your outlets with their keys, once. Easiest.</span>
+          </button>
           <button type="button" class="choice" id="scanBtn">
             <span class="choice-title">Scan network</span>
             <span class="hint">Find outlets on your Wi-Fi</span>
@@ -65,6 +69,45 @@
           <button type="button" id="scanAgainBtn">Scan again</button>
           <span class="spacer"></span>
           <button type="button" data-close>Done</button>
+        </div>
+      </section>
+
+      <section data-view="cloud" hidden>
+        <h2>Connect Smart Life</h2>
+
+        <form id="cloudCodeStep" novalidate>
+          <p class="hint info-text">
+            Gets each outlet's key from your Smart Life account, once. After that PureSwitch only
+            talks to your outlets over your Wi-Fi.
+          </p>
+          <label>
+            User code
+            <input id="cloudUserCode" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+            <span class="hint">In Smart Life: Me → ⚙ (top right) → Account and Security → User Code.</span>
+          </label>
+          <p id="cloudError" class="cloud-error" hidden></p>
+          <div class="sheet-actions">
+            <button type="button" data-close>Cancel</button>
+            <span class="spacer"></span>
+            <button type="submit" id="cloudContinue" class="primary">Continue</button>
+          </div>
+        </form>
+
+        <div id="cloudQrStep" hidden>
+          <canvas id="cloudQr" class="qr" width="528" height="528" aria-label="Login QR code"></canvas>
+          <ol class="steps">
+            <li>Open Smart Life, tap <b>+</b> (top right) → <b>Scan</b>.</li>
+            <li>Scan this code and confirm.</li>
+          </ol>
+          <p class="hint">
+            Only have this phone? Take a screenshot, then in Smart Life's scanner tap the photo icon
+            and pick it. Delete the screenshot afterwards.
+          </p>
+          <p id="cloudStatus" class="hint scan-status searching">Waiting for Smart Life…</p>
+          <div class="sheet-actions">
+            <span class="spacer"></span>
+            <button type="button" data-close>Cancel</button>
+          </div>
         </div>
       </section>
 
@@ -99,12 +142,12 @@
 
         <div id="fMissing" class="missing" hidden>
           <p id="fMissingText"></p>
-          <button type="button" id="fMissingImport">Import key file</button>
+          <button type="button" id="fMissingImport">Connect Smart Life</button>
         </div>
 
         <details id="fConnection">
           <summary>Connection</summary>
-          <p class="hint">Local network only. PureSwitch never connects to the internet.</p>
+          <p class="hint">Switching happens on your Wi-Fi only. The internet is only used once, by Connect Smart Life.</p>
           <label>
             IP address
             <input id="fIp" type="text" inputmode="decimal" autocomplete="off" placeholder="192.168.1.42" />

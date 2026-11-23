@@ -296,6 +296,40 @@ h1 {
   font-weight: 600;
 }
 
+.choice-main {
+  border-color: var(--on);
+}
+
+/* Connect Smart Life */
+.qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  background: #fff; /* QR codes need a light background to scan, also in dark mode */
+}
+
+.steps {
+  margin: 0 0 8px;
+  padding-left: 20px;
+  font-size: 0.9rem;
+}
+
+.steps li {
+  margin-bottom: 2px;
+}
+
+.cloud-error {
+  margin: -4px 0 12px;
+  font-size: 0.85rem;
+  color: var(--danger);
+}
+
+#cloudStatus {
+  margin: 12px 0 4px;
+}
+
 .scan-status {
   margin: -8px 0 12px;
   font-size: 0.9rem;

@@ -51,8 +51,14 @@ section 2 (via cable with `adb install -r <apk>`, or by copying the file to the 
 
 ## 3. Getting the outlets' local keys (once)
 
-*Why keys at all, and simpler alternatives to the steps below: see the devlog entry
-"2026-11-23 – Why outlets need a key, and three ways to get it" in `DEVLOG.md`.*
+**Easiest: in the app, Edit → + Add outlet → Connect Smart Life.** Enter your user code (Smart
+Life: Me → ⚙ → Account and Security → User Code), scan the QR code with Smart Life (+ → Scan) and
+confirm. All your outlets are added with their keys. With only one phone, take a screenshot of the
+QR code and pick it in Smart Life's scanner via the photo icon.
+
+*Why keys at all: see "Why outlets need a key, and three ways to get it" in `DEVLOG.md`.*
+
+### Alternative: tinytuya on a PC (keeps the app fully offline)
 
 Outlets only accept commands encrypted with their own local key. The easiest way to get the keys
 is **tinytuya** on the PC:

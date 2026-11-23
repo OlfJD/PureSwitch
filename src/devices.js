@@ -125,6 +125,55 @@ export async function getPower(outlet) {
   return { on: !!outlet.isOn, version: outlet.version || '' };
 }
 
+/* ---------- Connect Smart Life ----------
+ * The only step that goes online: a one-time QR login to the Smart Life account that fetches each
+ * outlet's local key (see TuyaCloud.java). The keys go straight into the vault on the phone side;
+ * this file only ever sees names and device IDs.
+ */
+
+/** Starts a login. Resolves to the text to show as a QR code. */
+export async function cloudStart(userCode) {
+  if (native) return (await native.cloudStart({ userCode })).qr;
+  demoPolls = 0;
+  await sleep(500);
+  return `tuyaSmart--qrLogin?token=demo-${Date.now()}`;
+}
+
+/** Resolves to null until the QR code is scanned, then to [{ devId, name, category, hasKey }]. */
+export async function cloudPoll() {
+  if (native) {
+    const r = await native.cloudPoll();
+    return r.done ? r.devices : null;
+  }
+  await sleep(300);
+  if (++demoPolls < 3) return null;
+  return DEMO_CLOUD.map((d) => ({ ...d }));
+}
+
+/** Saves the fetched keys for these outlets: pairs = [{ id, devId }]. Resolves to the saved ids. */
+export async function cloudSaveKeys(pairs) {
+  let ids;
+  if (native) {
+    ids = (await native.cloudSaveKeys({ pairs })).ids;
+    for (const id of ids) keyIds.add(id);
+  } else {
+    ids = pairs.map((p) => p.id);
+  }
+  return ids;
+}
+
+export function cloudCancel() {
+  if (native) native.cloudCancel().catch(() => {});
+}
+
+let demoPolls = 0;
+const DEMO_CLOUD = [
+  { devId: 'bf3a9c27e10d44f1a8kq2x', name: 'Desk lamp', category: 'cz', hasKey: true },
+  { devId: 'bf71d0e5c3a2b98f64tz0m', name: 'PC', category: 'cz', hasKey: true },
+  { devId: 'eb5c08f1a9d34e7b20pw4r', name: 'Power strip', category: 'pc', hasKey: true },
+  { devId: 'demo-light-0001', name: 'Ceiling light', category: 'dj', hasKey: true },
+];
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const DEMO_FOUND = [

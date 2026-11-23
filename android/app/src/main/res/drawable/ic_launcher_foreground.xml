@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PureSwitch icon: green power symbol. Drawn on a 64-unit tile (same as public/favicon.svg),
+     scaled into the 108dp adaptive-icon canvas so the tile fills the ~72dp visible area. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="1.125"
+        android:scaleY="1.125"
+        android:translateX="18"
+        android:translateY="18">
+        <path
+            android:pathData="M39.46,22.35 A13,13 0 1,1 24.54,22.35"
+            android:strokeColor="#22C55E"
+            android:strokeWidth="5"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M32,16 L32,31"
+            android:strokeColor="#22C55E"
+            android:strokeWidth="5"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

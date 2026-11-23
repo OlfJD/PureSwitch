@@ -1,5 +1,10 @@
 import './style.css';
+import qrcode from 'qrcode-generator';
 import {
+  cloudCancel,
+  cloudPoll,
+  cloudSaveKeys,
+  cloudStart,
   discover,
   forgetKey,
   getPower,
@@ -91,6 +96,7 @@ function stateText(o) {
   if (errors.has(o.id)) return errors.get(o.id).message;
   const needs = missing(o);
   if (needs.length === 1 && needs[0] === 'key') return 'Needs key';
+  if (needs.length === 1 && needs[0] === 'ip') return 'Not found yet';
   if (needs.length) return 'Set up';
   return o.isOn ? 'On' : 'Off';
 }
@@ -199,11 +205,44 @@ async function toggle(outlet) {
   await switchOutlet(outlet, !outlet.isOn);
 }
 
+/**
+ * Outlets that have their key but no address yet (e.g. added with Connect Smart Life away from
+ * home): look for them on the Wi-Fi. Each one still has to prove its key before it's used.
+ */
+let finding = false;
+async function findMissing() {
+  const lost = outlets.filter((o) => {
+    const needs = missing(o);
+    return needs.length === 1 && needs[0] === 'ip';
+  });
+  if (!lost.length || finding || addDialog.open) return;
+  finding = true;
+  try {
+    const found = await discover();
+    await Promise.all(
+      found.map(async (d) => {
+        const o = lost.find((x) => x.devId === d.devId);
+        if (!o || o.ip || busy.has(o.id)) return;
+        try {
+          await verifyAddress(o, d.ip, o.version || d.version);
+        } catch {
+          // not the real outlet, or not reachable: try again next time
+        }
+      })
+    );
+  } catch {
+    // Wi-Fi off or scanning not possible right now
+  } finally {
+    finding = false;
+  }
+}
+
 /** Ask every outlet whether it's really on (someone may have pressed the button on the plug). */
 async function refreshAll() {
   if (isDemo || editing) return;
-  await Promise.all(
-    outlets
+  await Promise.all([
+    findMissing(),
+    ...outlets
       .filter((o) => isReady(o) && !busy.has(o.id))
       .map(async (o) => {
         try {
@@ -212,8 +251,8 @@ async function refreshAll() {
         } catch (err) {
           showError(o, err?.message || 'Offline');
         }
-      })
-  );
+      }),
+  ]);
   save();
   render();
 }
@@ -390,7 +429,7 @@ async function runScan() {
   });
   if (needKey) {
     scanStatus.textContent +=
-      " To switch them, each also needs its local key: a scan can't find it. Use Import key file.";
+      " To switch them, each also needs its key: a scan can't find it. Use Connect Smart Life.";
   }
   scanList.replaceChildren(...found.map((d) => foundRow(d, unconfirmed.has(d.devId))));
 }
@@ -512,6 +551,203 @@ async function importDevices(list) {
   return parts.join(' ');
 }
 
+/* ---------- Connect Smart Life ---------- */
+
+const cloudCodeStep = document.getElementById('cloudCodeStep');
+const cloudQrStep = document.getElementById('cloudQrStep');
+const cloudUserCode = document.getElementById('cloudUserCode');
+const cloudError = document.getElementById('cloudError');
+const cloudContinue = document.getElementById('cloudContinue');
+const cloudQr = document.getElementById('cloudQr');
+const cloudStatus = document.getElementById('cloudStatus');
+const USER_CODE_KEY = 'pureswitch_user_code'; // not secret: it only identifies the account
+const LOGIN_TIMEOUT_MS = 4 * 60 * 1000;
+let cloudRun = 0; // ignores a login the user walked away from
+
+function openCloud() {
+  cloudRun++;
+  cloudCodeStep.hidden = false;
+  cloudQrStep.hidden = true;
+  cloudError.hidden = true;
+  cloudContinue.disabled = false;
+  try {
+    cloudUserCode.value = localStorage.getItem(USER_CODE_KEY) || '';
+  } catch {
+    // storage unavailable
+  }
+  showView('cloud');
+  if (!addDialog.open) addDialog.showModal();
+  cloudUserCode.focus();
+}
+
+document.getElementById('cloudBtn').addEventListener('click', openCloud);
+
+addDialog.addEventListener('close', () => {
+  cloudRun++;
+  cloudCancel();
+});
+
+function cloudFail(message) {
+  cloudCodeStep.hidden = false;
+  cloudQrStep.hidden = true;
+  cloudContinue.disabled = false;
+  cloudError.textContent = message;
+  cloudError.hidden = false;
+}
+
+cloudCodeStep.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = cloudUserCode.value.trim();
+  if (!code) {
+    cloudFail('Enter your user code first.');
+    return;
+  }
+  const run = ++cloudRun;
+  cloudError.hidden = true;
+  cloudContinue.disabled = true;
+
+  let qrText;
+  try {
+    qrText = await cloudStart(code);
+  } catch (err) {
+    if (run === cloudRun) cloudFail(err?.message || "Couldn't reach Smart Life. Check your internet connection.");
+    return;
+  }
+  if (run !== cloudRun) return;
+  try {
+    localStorage.setItem(USER_CODE_KEY, code);
+  } catch {
+    // storage unavailable
+  }
+
+  drawQr(cloudQr, qrText);
+  cloudCodeStep.hidden = true;
+  cloudQrStep.hidden = false;
+  cloudStatus.textContent = 'Waiting for Smart Life…';
+  cloudStatus.classList.add('searching');
+  waitForLogin(run);
+});
+
+async function waitForLogin(run) {
+  const deadline = Date.now() + LOGIN_TIMEOUT_MS;
+  while (run === cloudRun) {
+    if (Date.now() > deadline) {
+      cloudCancel();
+      cloudFail('The QR code expired. Tap Continue for a new one.');
+      return;
+    }
+    await sleep(2000);
+    if (run !== cloudRun) return;
+    let devices;
+    try {
+      devices = await cloudPoll();
+    } catch (err) {
+      if (run === cloudRun) cloudFail(err?.message || "Couldn't get your outlets from Smart Life.");
+      return;
+    }
+    if (run !== cloudRun) return;
+    if (devices) {
+      cloudStatus.textContent = 'Connected. Saving your outlets…';
+      await finishCloud(devices);
+      return;
+    }
+  }
+}
+
+async function finishCloud(devices) {
+  // Only plugs, power strips and switches; lights, sensors etc. are left out.
+  const plugs = devices.filter((d) => d.hasKey && (!d.category || PLUG_CATEGORIES.has(d.category)));
+  const others = devices.length - plugs.length;
+
+  let added = 0;
+  const pairs = [];
+  for (const d of plugs) {
+    let o = outlets.find((x) => x.devId === d.devId);
+    if (!o) {
+      o = {
+        id: newId(),
+        name: (d.name || '').trim() || 'Outlet',
+        isOn: false,
+        safetyLock: false,
+        ip: '',
+        devId: d.devId,
+        version: '',
+      };
+      outlets.push(o);
+      added++;
+    }
+    pairs.push({ id: o.id, devId: d.devId });
+  }
+
+  let saved = [];
+  try {
+    saved = await cloudSaveKeys(pairs);
+  } catch {
+    // handled below: nothing saved
+  }
+  for (const id of saved) {
+    const o = outlets.find((x) => x.id === id);
+    if (!o) continue;
+    o.checkedIp = ''; // a new key has to be proven again
+    if (isDemo) o.demoKey = true;
+  }
+  save();
+  render();
+
+  if (!plugs.length) {
+    showInfo(
+      'No outlets found',
+      others
+        ? `Your Smart Life account has ${others} other device${others === 1 ? '' : 's'}, but no plugs or power strips.`
+        : 'Your Smart Life account has no devices.'
+    );
+    return;
+  }
+  if (saved.length < pairs.length) {
+    showInfo("Couldn't save keys", 'Something went wrong storing the keys. Try Connect Smart Life again.');
+    return;
+  }
+
+  // Got the keys. Now find the outlets on the Wi-Fi.
+  const updated = pairs.length - added;
+  const summary = [
+    added ? `Added ${added} outlet${added === 1 ? '' : 's'}.` : '',
+    updated ? `Updated the key of ${updated}.` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  showView('scan');
+  const run = scanRun + 1;
+  await runScan();
+  if (run !== scanRun || !addDialog.open) return;
+  const notHere = outlets.some((o) => pairs.some((p) => p.id === o.id) && !o.ip);
+  scanStatus.textContent = `${summary} ${scanStatus.textContent}${
+    notHere ? " Outlets that weren't found are found automatically once you're on their Wi-Fi." : ''
+  }`;
+}
+
+/** Draws a QR code with a white border (scanners need the "quiet zone"). */
+function drawQr(canvas, text) {
+  const qr = qrcode(0, 'Q');
+  qr.addData(text);
+  qr.make();
+  const n = qr.getModuleCount();
+  const size = canvas.width;
+  const cell = Math.floor(size / (n + 8));
+  const offset = Math.floor((size - cell * n) / 2);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#000';
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (qr.isDark(r, c)) ctx.fillRect(offset + c * cell, offset + r * cell, cell, cell);
+    }
+  }
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 /* ---------- Edit dialog ---------- */
 
 const dialog = document.getElementById('editDialog');
@@ -578,22 +814,25 @@ function showMissing(outlet) {
   const needs = missing(outlet);
   fMissing.hidden = needs.length === 0;
   if (!needs.length) return;
+  fMissingImport.hidden = !needs.includes('key');
   if (needs.includes('key')) {
-    const also = needs.length > 1 ? ' It also needs its IP address and device ID (a scan fills those in).' : '';
     fMissingText.textContent =
-      "This outlet can't be switched yet: it needs its local key. Outlets don't share their key over " +
-      'Wi-Fi, so a scan can\'t find it. Import your tinytuya devices.json, or paste the key under ' +
-      `Connection.${also}`;
+      "This outlet can't be switched yet: it needs its key. Outlets don't share their key over " +
+      "Wi-Fi, so a scan can't find it. Connect Smart Life gets the keys for all your outlets at once.";
+  } else if (needs.length === 1 && needs[0] === 'ip') {
+    fMissingText.textContent =
+      "This outlet hasn't been found on your Wi-Fi yet. It's found automatically when your phone is " +
+      'on the same Wi-Fi, or use Scan network.';
   } else {
     fMissingText.textContent =
       "This outlet can't be switched yet: it needs its IP address and device ID. Use Scan network to fill them in.";
   }
 }
 
-document.getElementById('fMissingImport').addEventListener('click', () => {
+const fMissingImport = document.getElementById('fMissingImport');
+fMissingImport.addEventListener('click', () => {
   dialog.close();
-  importFile.value = '';
-  importFile.click();
+  openCloud();
 });
 
 form.addEventListener('submit', async () => {

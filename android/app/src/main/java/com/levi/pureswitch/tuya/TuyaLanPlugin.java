@@ -121,6 +121,139 @@ public class TuyaLanPlugin extends Plugin {
         call.resolve();
     }
 
+    /* ---------------- Connect Smart Life (see TuyaCloud) ---------------- */
+
+    /** The login in progress. Keys fetched from the cloud wait here until the app has saved them. */
+    private final Object cloudLock = new Object();
+    private String cloudUserCode;
+    private String cloudToken;
+    private final java.util.Map<String, String> pendingKeys = new java.util.HashMap<>();
+
+    @PluginMethod
+    public void cloudStart(PluginCall call) {
+        String userCode = call.getString("userCode", "").trim();
+        if (!userCode.matches("[A-Za-z0-9]{4,64}")) {
+            call.reject("That doesn't look like a user code");
+            return;
+        }
+        io.execute(() -> {
+            try {
+                String token = TuyaCloud.requestQr(userCode);
+                synchronized (cloudLock) {
+                    cloudUserCode = userCode;
+                    cloudToken = token;
+                    pendingKeys.clear();
+                }
+                JSObject result = new JSObject();
+                result.put("qr", "tuyaSmart--qrLogin?token=" + token);
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject(message(e, "Couldn't reach Smart Life"));
+            }
+        });
+    }
+
+    /**
+     * Resolves to { done: false } until the QR code has been scanned and confirmed. Then fetches
+     * the devices, keeps their keys here (never handed to the web side), ends the login and
+     * resolves to { done: true, devices: [{ devId, name, category, hasKey }] }.
+     */
+    @PluginMethod
+    public void cloudPoll(PluginCall call) {
+        final String token;
+        final String userCode;
+        synchronized (cloudLock) {
+            token = cloudToken;
+            userCode = cloudUserCode;
+        }
+        if (token == null) {
+            call.reject("Start again");
+            return;
+        }
+        io.execute(() -> {
+            try {
+                org.json.JSONObject login = TuyaCloud.pollLogin(token, userCode);
+                JSObject result = new JSObject();
+                if (login == null) {
+                    result.put("done", false);
+                    call.resolve(result);
+                    return;
+                }
+                synchronized (cloudLock) {
+                    if (!token.equals(cloudToken)) { // cancelled or restarted meanwhile
+                        call.reject("Start again");
+                        return;
+                    }
+                    cloudToken = null; // a token can only be used once
+                }
+                TuyaCloud.Session session = new TuyaCloud.Session(login);
+                java.util.List<TuyaCloud.Device> devices;
+                try {
+                    devices = TuyaCloud.fetchDevices(session);
+                } finally {
+                    TuyaCloud.logout(session);
+                }
+                JSArray list = new JSArray();
+                synchronized (cloudLock) {
+                    pendingKeys.clear();
+                    for (TuyaCloud.Device d : devices) {
+                        boolean hasKey = d.localKey.length() == 16;
+                        if (hasKey) pendingKeys.put(d.devId, d.localKey);
+                        JSObject o = new JSObject();
+                        o.put("devId", d.devId);
+                        o.put("name", d.name);
+                        o.put("category", d.category);
+                        o.put("hasKey", hasKey);
+                        list.put(o);
+                    }
+                }
+                result.put("done", true);
+                result.put("devices", list);
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject(message(e, "Couldn't get your outlets from Smart Life"));
+            }
+        });
+    }
+
+    /** Moves fetched keys into the vault: pairs = [{ id (app outlet id), devId }]. */
+    @PluginMethod
+    public void cloudSaveKeys(PluginCall call) {
+        JSArray pairs = call.getArray("pairs", new JSArray());
+        io.execute(() -> {
+            JSArray saved = new JSArray();
+            try {
+                synchronized (cloudLock) {
+                    for (int i = 0; i < pairs.length(); i++) {
+                        org.json.JSONObject p = pairs.optJSONObject(i);
+                        if (p == null) continue;
+                        String id = p.optString("id", "");
+                        String key = pendingKeys.get(p.optString("devId", ""));
+                        if (id.isEmpty() || key == null) continue;
+                        vault.put(id, key);
+                        saved.put(id);
+                    }
+                    pendingKeys.clear();
+                }
+                JSObject result = new JSObject();
+                result.put("ids", saved);
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject("Couldn't save keys");
+            }
+        });
+    }
+
+    @PluginMethod
+    public void cloudCancel(PluginCall call) {
+        synchronized (cloudLock) {
+            cloudToken = null;
+            cloudUserCode = null;
+            pendingKeys.clear();
+        }
+        call.resolve();
+    }
+
     @PluginMethod
     public void listKeys(PluginCall call) {
         JSObject result = new JSObject();

@@ -1,5 +1,49 @@
 # PureSwitch – Devlog
 
+## 2026-11-23 – App icon
+
+- Picked from six options: **power symbol, green (#22C55E) on dark (#18181B)**.
+- Android: adaptive icon with a vector foreground (`drawable/ic_launcher_foreground.xml`), dark
+  background colour, and a monochrome layer for Android 13+ themed icons. PNG icons for Android
+  7 (API 24–25) were drawn with the same shapes.
+- The white Capacitor splash screen is replaced: dark background with the power symbol
+  (`drawable/splash.xml`), and `windowSplashScreenBackground` for Android 12+.
+- Browser icon `public/favicon.svg` is the same icon (was Vite's logo).
+- Removed the template's Capacitor/robot icon files and the splash PNGs.
+- Removed `android:roundIcon`: the OnePlus launcher shows an app's round icon whenever it has
+  one, so PureSwitch was a circle among rounded squares. Now the launcher shapes it like the rest.
+
+### Login confirmed
+- Connect Smart Life worked on the phone (at work): the keys were saved. Switching still needs
+  testing at home.
+
+## 2026-11-23 – Connect Smart Life (option 1 from below)
+
+Goal: scan → tap. *Edit → + Add outlet → **Connect Smart Life***:
+1. Enter the **user code** from Smart Life (Me → ⚙ → Account and Security → User Code).
+2. Scan the QR code with Smart Life (+ → Scan) and confirm. On a single phone: take a
+   screenshot and pick it in Smart Life's scanner via the photo icon.
+3. PureSwitch adds every plug / power strip / switch with its name and key, then scans the
+   Wi-Fi for their addresses. Lights, sensors etc. are left out.
+
+### How it works
+- `TuyaCloud.java`, ported from Tuya's open-source tuya-device-sharing-sdk (MIT) and Home
+  Assistant's Tuya integration (Apache 2.0): QR login at `apigw.iotbing.com`, then signed +
+  AES-GCM-encrypted requests to the account's Tuya API server for homes → devices (`local_key`).
+- It uses Home Assistant's public client ID, because Tuya only offers this login for Home
+  Assistant. **Smart Life shows the request as "Home Assistant".**
+- The keys go straight from the Java side into the encrypted vault. The web side only gets names,
+  device IDs and categories. Right after fetching, the login is ended (`terminal/expire`), and no
+  tokens are stored. This is the only internet connection the app ever makes, and only to
+  `https://…tuya….com` / `iotbing.com`.
+- Outlets that have a key but no address yet show **Not found yet**. They're found automatically
+  (scan + key check) whenever the app opens or comes back, so connecting away from home is fine.
+- Added `qrcode-generator` (draws the QR code, no network).
+
+### Not yet verified
+- Demo mode tested in the browser (QR → 3 plugs added, light skipped → scan). The APK compiles.
+  The real Smart Life login hasn't been tried yet.
+
 ## 2026-11-23 – Why outlets need a key, and three ways to get it
 
 The goal: **scan → save → tap**, nothing else.
