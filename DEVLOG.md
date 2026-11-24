@@ -1,5 +1,42 @@
 # PureSwitch – Devlog
 
+## 2026-11-24 – 1.0.0: public release
+
+### Security check before going public
+- No keys, tokens or passwords in the code or the git history.
+- Release builds don't log plugin calls (`loggingBehavior: "debug"` = only debug builds log; debug
+  builds log hand-entered keys, so never share a debug log). Release APK checked: not debuggable,
+  backups off, signed with the release key.
+- Remaining known limit: Tuya protocol 3.3 can't stop a replayed command (see README).
+- Decided: keep Connect Smart Life (uses Home Assistant's login ID) and say so in the README.
+
+### Release
+- Release signing key created outside the repo; `android/app/build.gradle` reads it from
+  `keystore.properties` or `PURESWITCH_KEYSTORE_PROPERTIES`. Version 1.0.0 (versionCode 1).
+- README, MIT `LICENSE`, `THIRD_PARTY_NOTICES.md` (Tuya SDK MIT notice), `docs/BUILDING.md`
+  (replaces the personal `PHONE_SETUP.md`), screenshots in `docs/images` (demo data).
+- Removed unused template files (Vite counter and assets, `public/icons.svg`, Capacitor's
+  example tests).
+
+## 2026-11-24 – "All on" switches one outlet at a time
+
+### Why
+Switching on the PC's outlet sometimes trips the fuse (also with Smart Life), even with the PC
+off: its power supply charges its capacitors the moment power comes on, which draws a short,
+large burst of current ("inrush"). An older electrical installation and the surge protector in front
+of the PC make it worse. Not yet known whether the breaker or the FI (RCD) trips.
+
+### Changed
+- **All on** now switches outlets one after another with 2 s between them, instead of all at
+  once, so their bursts don't add up. Protected outlets (like the PC) go last. The button is
+  disabled while it runs. All off is unchanged (switching off causes no burst).
+- A single tap can't be helped by the app: the burst depends on when the plug's relay closes.
+  Real fixes are outside the app: an inrush current limiter (*Einschaltstrombegrenzer*) in front
+  of the PC, not switching the PC's outlet at all (e.g. Wake-on-LAN instead), or an electrician.
+
+### Confirmed at home
+- Connect Smart Life found the outlets and switching works.
+
 ## 2026-11-23 – App icon
 
 - Picked from six options: **power symbol, green (#22C55E) on dark (#18181B)**.
@@ -14,8 +51,7 @@
   one, so PureSwitch was a circle among rounded squares. Now the launcher shapes it like the rest.
 
 ### Login confirmed
-- Connect Smart Life worked on the phone (at work): the keys were saved. Switching still needs
-  testing at home.
+- Connect Smart Life worked on the phone: the keys were saved.
 
 ## 2026-11-23 – Connect Smart Life (option 1 from below)
 
@@ -65,7 +101,7 @@ outlet when it was paired in Smart Life. So the key has to come from somewhere o
    - Has to be built and tested at home with the real outlets.
 2. **Keep the app 100 % offline and use tinytuya once on a PC.** The app stays as it is: run the
    tinytuya wizard (needs a free Tuya developer account), then import `devices.json`. Steps are in
-   `PHONE_SETUP.md`, section 3. This is the part that's currently too complicated.
+   the README. This is the part that's currently too complicated.
 3. **Different outlets, e.g. Shelly plugs.** Made for local control: no keys, no cloud. The app
    could find and switch them with a tap, with much simpler code. Requires buying new outlets.
 

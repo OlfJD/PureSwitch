@@ -1,5 +1,6 @@
-{
+﻿{
   "appId": "com.levi.pureswitch",
   "appName": "PureSwitch",
-  "webDir": "dist"
+  "webDir": "dist",
+  "loggingBehavior": "debug"
 }

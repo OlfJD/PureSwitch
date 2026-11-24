@@ -33,9 +33,10 @@ import javax.crypto.spec.SecretKeySpec;
  * fetches the local key of each outlet. It uses Tuya's QR-code login for Home Assistant (no
  * developer account needed), so Smart Life shows the request as coming from Home Assistant.
  *
- * Ported from Tuya's open-source tuya-device-sharing-sdk (MIT, customerapi.py / user.py) and
- * Home Assistant's Tuya integration (Apache 2.0, const.py). The login is ended again right after
- * the keys are fetched; no tokens are stored.
+ * Ported from Tuya's open-source tuya-device-sharing-sdk (customerapi.py / user.py),
+ * Copyright (c) 2023 Tuya, MIT License (full text in THIRD_PARTY_NOTICES.md), with the client ID
+ * from Home Assistant's Tuya integration (Apache 2.0, const.py). The login is ended again right
+ * after the keys are fetched; no tokens are stored.
  */
 final class TuyaCloud {
     private TuyaCloud() {}
