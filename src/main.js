@@ -137,7 +137,7 @@ function render() {
 
   const ready = outlets.filter(isReady);
   allBar.hidden = editing || ready.length < 2;
-  allOnBtn.disabled = !ready.some((o) => !o.isOn && !busy.has(o.id));
+  allOnBtn.disabled = allOnRunning || !ready.some((o) => !o.isOn && !busy.has(o.id));
   allOffBtn.disabled = !ready.some((o) => o.isOn && !busy.has(o.id));
 
   document.body.classList.toggle('editing', editing);
@@ -269,8 +269,32 @@ const allOffBtn = document.getElementById('allOffBtn');
 
 const switchable = () => outlets.filter((o) => isReady(o) && !busy.has(o.id));
 
-allOnBtn.addEventListener('click', () => {
-  Promise.all(switchable().filter((o) => !o.isOn).map((o) => switchOutlet(o, true)));
+// Pause between outlets for "All on". Whatever is plugged in draws a short burst of current when
+// power comes on (a PC power supply charging its capacitors, even with the PC off). In older
+// installations several bursts at once can trip the breaker, so outlets go on one at a time.
+const STAGGER_MS = 2000;
+let allOnRunning = false;
+
+allOnBtn.addEventListener('click', async () => {
+  if (allOnRunning) return;
+  allOnRunning = true;
+  render();
+  try {
+    // Protected outlets (a PC, a 3D printer) go last, after everything else is already on.
+    const targets = switchable()
+      .filter((o) => !o.isOn)
+      .sort((a, b) => Number(!!a.safetyLock) - Number(!!b.safetyLock));
+    let first = true;
+    for (const o of targets) {
+      if (o.isOn || busy.has(o.id)) continue; // changed meanwhile
+      if (!first) await sleep(STAGGER_MS);
+      first = false;
+      await switchOutlet(o, true);
+    }
+  } finally {
+    allOnRunning = false;
+    render();
+  }
 });
 
 allOffBtn.addEventListener('click', async () => {
