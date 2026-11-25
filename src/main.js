@@ -13,10 +13,12 @@ import {
   isDemo,
   isLocalIPv4,
   isReady,
+  log,
   missing,
   setPower,
   storeKey,
 } from './devices.js';
+import { allOnOrder, sanitizeOutlets } from './outlets.js';
 
 // Same key as before, so outlets saved by older versions carry over.
 const STORAGE_KEY = 'pureswitch_devices_v1';
@@ -24,16 +26,19 @@ const STORAGE_KEY = 'pureswitch_devices_v1';
 let outlets = load();
 let editing = false;
 const busy = new Set(); // outlet ids currently being switched
-const errors = new Map(); // outlet id -> { message, token }
+const errors = new Map(); // outlet id -> { message }
+
+/** Outlet name plus the end of its id, as used in the diagnostics log. */
+const tag = (o) => `${o.name}#${String(o.id).slice(-6)}`;
 
 function load() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (Array.isArray(saved)) return saved;
+    const { outlets: clean, dropped } = sanitizeOutlets(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+    if (dropped) log(`dropped ${dropped} damaged saved outlet(s)`);
+    return clean;
   } catch {
-    // ignore corrupt or unavailable storage
+    return []; // unreadable or unavailable storage
   }
-  return [];
 }
 
 function save() {
@@ -146,14 +151,49 @@ function render() {
   addBtn.hidden = !editing && outlets.length > 0;
 }
 
+/**
+ * Shows the error on the outlet's row until the outlet answers again. (It used to vanish after a
+ * few seconds, so a failed switch looked like a tap that did nothing.)
+ */
 function showError(outlet, message) {
-  const token = {};
-  errors.set(outlet.id, { message, token });
-  setTimeout(() => {
-    if (errors.get(outlet.id)?.token !== token) return; // a newer error replaced it
-    errors.delete(outlet.id);
-    render();
-  }, 4000);
+  errors.set(outlet.id, { message });
+}
+
+/** One network scan at a time: scans listen on fixed ports, so two at once would block each other. */
+let scanning = null;
+function discoverShared() {
+  if (!scanning) scanning = discover().finally(() => (scanning = null));
+  return scanning;
+}
+
+/**
+ * The outlet didn't answer at its address. Look for it on the Wi-Fi: routers sometimes give an
+ * outlet a new address. True if it answered after proving its key, at its old or a new address.
+ */
+async function relocate(outlet) {
+  if (isDemo) return false;
+  let found;
+  try {
+    found = await discoverShared();
+  } catch {
+    return false; // Wi-Fi off or scanning not possible right now
+  }
+  const d = found.find((x) => x.devId === outlet.devId);
+  if (!d) {
+    log(`${tag(outlet)} not found on the Wi-Fi`);
+    return false;
+  }
+  const oldIp = outlet.ip;
+  try {
+    // Keep the protocol we already know works, so a fake can't push us to an older one.
+    await verifyAddress(outlet, d.ip, outlet.version || d.version);
+    save();
+    log(`${tag(outlet)} found ${d.ip === oldIp ? 'at the same address' : `at a new address ${d.ip} (was ${oldIp})`}`);
+    return true;
+  } catch (err) {
+    log(`${tag(outlet)} found at ${d.ip} but it didn't answer properly: ${err?.message}`);
+    return false;
+  }
 }
 
 /**
@@ -162,21 +202,28 @@ function showError(outlet, message) {
  * the outlet's address, state and protocol are updated and marked as checked.
  */
 async function verifyAddress(outlet, ip, version) {
+  const run = runOf(outlet);
   const result = await getPower({ ...outlet, ip, version: version ?? outlet.version });
   outlet.ip = ip;
   outlet.checkedIp = ip;
-  outlet.isOn = result.on;
+  // A switch started while we were asking: its result is newer than this answer.
+  if (runOf(outlet) === run) outlet.isOn = result.on;
   if (result.version) outlet.version = result.version;
   return result;
 }
+
+/** A run number per outlet, raised by every switch, so a late answer can't overwrite a newer state. */
+const runs = new Map();
+const runOf = (o) => runs.get(o.id) || 0;
 
 /** Switch one outlet, showing "…" while it works and an error if it fails. */
 async function switchOutlet(outlet, target) {
   if (busy.has(outlet.id)) return;
   busy.add(outlet.id);
+  runs.set(outlet.id, runOf(outlet) + 1);
   errors.delete(outlet.id);
   render();
-  try {
+  const send = async () => {
     // Never send a switch command to an address that hasn't proved it's the real outlet.
     // (Older plugs accept a recorded command again later, so it mustn't reach anyone else.)
     if (!isDemo && outlet.checkedIp !== outlet.ip) await verifyAddress(outlet, outlet.ip);
@@ -184,7 +231,21 @@ async function switchOutlet(outlet, target) {
     outlet.isOn = target;
     if (version) outlet.version = version; // remember which protocol worked
     save();
+  };
+  try {
+    try {
+      await send();
+    } catch (err) {
+      // Not answering: it may have a new address. Find it and try once more.
+      if (err?.message !== 'Offline') throw err;
+      log(`${tag(outlet)} didn't answer, looking for it on the Wi-Fi`);
+      if (!(await relocate(outlet))) throw err;
+      await send();
+    }
+    errors.delete(outlet.id);
+    log(`${tag(outlet)} is now ${target ? 'on' : 'off'}`);
   } catch (err) {
+    log(`${tag(outlet)}: turning ${target ? 'on' : 'off'} FAILED, showing "${err?.message}"`);
     showError(outlet, err?.message || "Couldn't reach it");
   } finally {
     busy.delete(outlet.id);
@@ -193,13 +254,18 @@ async function switchOutlet(outlet, target) {
 }
 
 async function toggle(outlet) {
-  if (busy.has(outlet.id)) return;
+  if (busy.has(outlet.id)) {
+    log(`tap on ${tag(outlet)} ignored: still busy`);
+    return;
+  }
+  log(`tap on ${tag(outlet)}: turn ${outlet.isOn ? 'off' : 'on'}${errors.has(outlet.id) ? ` (row showed "${errors.get(outlet.id).message}")` : ''}`);
   if (outlet.isOn && outlet.safetyLock) {
     const answer = await askConfirm({
       title: `Turn off ${outlet.name}?`,
       text: 'This outlet is protected. Anything plugged into it will lose power.',
       ok: 'Turn off',
     });
+    log(`protected ${tag(outlet)}: ${answer === 'ok' ? 'confirmed' : 'cancelled'}`);
     if (answer !== 'ok') return;
   }
   await switchOutlet(outlet, !outlet.isOn);
@@ -218,7 +284,7 @@ async function findMissing() {
   if (!lost.length || finding || addDialog.open) return;
   finding = true;
   try {
-    const found = await discover();
+    const found = await discoverShared();
     await Promise.all(
       found.map(async (d) => {
         const o = lost.find((x) => x.devId === d.devId);
@@ -240,6 +306,7 @@ async function findMissing() {
 /** Ask every outlet whether it's really on (someone may have pressed the button on the plug). */
 async function refreshAll() {
   if (isDemo || editing) return;
+  const started = Date.now();
   await Promise.all([
     findMissing(),
     ...outlets
@@ -249,15 +316,22 @@ async function refreshAll() {
           await verifyAddress(o, o.ip);
           errors.delete(o.id);
         } catch (err) {
+          if (err?.message === 'Offline' && (await relocate(o))) {
+            errors.delete(o.id); // found it, maybe at a new address
+            return;
+          }
           showError(o, err?.message || 'Offline');
         }
       }),
   ]);
   save();
   render();
+  const states = outlets.map((o) => `${tag(o)} ${errors.has(o.id) ? `"${errors.get(o.id).message}"` : isReady(o) ? (o.isOn ? 'on' : 'off') : `needs ${missing(o).join('+')}`}`);
+  log(`refreshed in ${Date.now() - started} ms: ${states.join(', ') || 'no outlets'}`);
 }
 
 document.addEventListener('visibilitychange', () => {
+  log(document.visibilityState === 'visible' ? 'back in the app' : 'app went to the background');
   if (document.visibilityState === 'visible') refreshAll();
 });
 
@@ -281,9 +355,8 @@ allOnBtn.addEventListener('click', async () => {
   render();
   try {
     // Protected outlets (a PC, a 3D printer) go last, after everything else is already on.
-    const targets = switchable()
-      .filter((o) => !o.isOn)
-      .sort((a, b) => Number(!!a.safetyLock) - Number(!!b.safetyLock));
+    const targets = allOnOrder(switchable().filter((o) => !o.isOn));
+    log(`All on: ${targets.map(tag).join(', ') || 'nothing to do'}`);
     let first = true;
     for (const o of targets) {
       if (o.isOn || busy.has(o.id)) continue; // changed meanwhile
@@ -319,6 +392,7 @@ allOffBtn.addEventListener('click', async () => {
     targets = targets.filter((o) => o.isOn && !busy.has(o.id));
   }
 
+  log(`All off: ${targets.map(tag).join(', ') || 'nothing to do'}`);
   Promise.all(targets.map((o) => switchOutlet(o, false)));
 });
 
@@ -394,7 +468,7 @@ async function runScan() {
   let found = [];
   let failure = null;
   try {
-    found = await discover();
+    found = await discoverShared();
   } catch (err) {
     failure = err?.message || "Couldn't scan. Make sure Wi-Fi is on.";
   }
@@ -734,6 +808,7 @@ async function finishCloud(devices) {
 
   // Got the keys. Now find the outlets on the Wi-Fi.
   const updated = pairs.length - added;
+  log(`Connect Smart Life: ${added} added, ${updated} updated, ${others} other devices left out`);
   const summary = [
     added ? `Added ${added} outlet${added === 1 ? '' : 's'}.` : '',
     updated ? `Updated the key of ${updated}.` : '',
@@ -933,6 +1008,12 @@ render();
 init(outlets)
   .then((changed) => {
     if (changed) save(); // keys moved into the encrypted vault
+    log(
+      `opened with ${outlets.length} outlet(s): ` +
+        outlets
+          .map((o) => `${tag(o)} @${o.ip || '-'} v${o.version || '?'}${o.safetyLock ? ' protected' : ''}${hasKey(o) ? '' : ' no-key'}`)
+          .join(', ')
+    );
     render();
     refreshAll();
   })

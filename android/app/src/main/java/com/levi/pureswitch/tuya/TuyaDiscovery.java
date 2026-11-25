@@ -52,6 +52,7 @@ final class TuyaDiscovery {
         lock.setReferenceCounted(false);
         lock.acquire();
 
+        Network wifiNet = LocalNet.wifi(context);
         List<DatagramSocket> sockets = new ArrayList<>();
         try {
             for (int port : PORTS) {
@@ -60,6 +61,13 @@ final class TuyaDiscovery {
                     s.setReuseAddress(true);
                     s.setBroadcast(true);
                     s.setSoTimeout(500);
+                    if (wifiNet != null) {
+                        try {
+                            wifiNet.bindSocket(s); // listen and ask on Wi-Fi, not mobile data
+                        } catch (IOException ignored) {
+                            // Wi-Fi went away meanwhile
+                        }
+                    }
                     s.bind(new InetSocketAddress(port));
                     sockets.add(s);
                 } catch (IOException ignored) {
@@ -70,7 +78,7 @@ final class TuyaDiscovery {
                 throw new IOException("Couldn't listen for outlets. Close the Smart Life app and try again.");
             }
 
-            sendDiscoveryRequest(context, sockets.get(0));
+            sendDiscoveryRequest(context, wifiNet, sockets.get(0));
 
             Map<String, JSObject> found = new LinkedHashMap<>();
             long deadline = SystemClock.elapsedRealtime() + seconds * 1000L;
@@ -137,10 +145,11 @@ final class TuyaDiscovery {
     }
 
     /** Protocol 3.5 plugs only announce themselves when asked, so ask on the local broadcast address. */
-    private static void sendDiscoveryRequest(Context context, DatagramSocket socket) {
+    private static void sendDiscoveryRequest(Context context, Network wifiNet, DatagramSocket socket) {
         try {
             ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
-            Network network = cm.getActiveNetwork();
+            // The Wi-Fi's own address range, even when mobile data is the default network
+            Network network = wifiNet != null ? wifiNet : cm.getActiveNetwork();
             LinkProperties props = network != null ? cm.getLinkProperties(network) : null;
             if (props == null) return;
 

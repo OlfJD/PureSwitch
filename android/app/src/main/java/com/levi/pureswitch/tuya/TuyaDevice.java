@@ -3,6 +3,8 @@ package com.levi.pureswitch.tuya;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.net.Network;
+
 import java.io.BufferedInputStream;
 import java.io.Closeable;
 import java.io.DataInputStream;
@@ -83,7 +85,7 @@ final class TuyaDevice implements Closeable {
      * Connects, runs the action and disconnects. With an unknown version it tries 3.3, 3.4 and
      * 3.5 in turn. Returns the protocol version that worked.
      */
-    static String withDevice(String ip, String devId, String localKey, String version, Action action)
+    static String withDevice(Network wifi, String ip, String devId, String localKey, String version, Action action)
             throws IOException {
         if (!LocalNet.isPrivateIPv4(ip)) throw new TuyaException("Not local");
         if (localKey.length() != 16) throw new TuyaException("Bad key");
@@ -102,7 +104,7 @@ final class TuyaDevice implements Closeable {
         IOException last = null;
         for (String v : versions) {
             try (TuyaDevice device = new TuyaDevice(devId, localKey, v)) {
-                device.connect(ip);
+                device.connect(wifi, ip);
                 action.run(device);
                 return v;
             } catch (TuyaException e) {
@@ -118,18 +120,60 @@ final class TuyaDevice implements Closeable {
 
     /* ---------------- Connection ---------------- */
 
-    private void connect(String ip) throws IOException {
-        socket = new Socket();
+    private void connect(Network wifi, String ip) throws IOException {
+        long start = System.currentTimeMillis();
         try {
-            socket.connect(new InetSocketAddress(ip, PORT), TIMEOUT_MS);
-        } catch (IOException e) {
-            throw new TuyaException("Offline");
+            socket = openSocket(wifi, ip);
+        } catch (IOException first) {
+            // A failure that comes back at once ("no route", "refused") is often the phone's Wi-Fi
+            // just waking up, or the plug finishing another connection: try once more. A timeout
+            // means the plug really isn't there, so don't make the user wait twice.
+            long took = System.currentTimeMillis() - start;
+            DiagLog.log("outlet", "connect to " + ip + " failed after " + took + " ms: " + first.getMessage()
+                    + (took > 1500 ? "" : ", trying once more"));
+            if (took > 1500) throw new TuyaException("Offline");
+            try {
+                Thread.sleep(700);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new TuyaException("Offline");
+            }
+            try {
+                socket = openSocket(wifi, ip);
+                DiagLog.log("outlet", "connect to " + ip + ": second try worked");
+            } catch (IOException second) {
+                DiagLog.log("outlet", "connect to " + ip + ": second try failed: " + second.getMessage());
+                throw new TuyaException("Offline");
+            }
         }
         socket.setSoTimeout(TIMEOUT_MS);
         socket.setTcpNoDelay(true);
         in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
         out = socket.getOutputStream();
         if (!version.equals("3.3")) negotiateSessionKey();
+    }
+
+    /** A connected socket to the plug, sent over Wi-Fi even when mobile data is the default network. */
+    private static Socket openSocket(Network wifi, String ip) throws IOException {
+        Socket s = new Socket();
+        try {
+            if (wifi != null) {
+                try {
+                    wifi.bindSocket(s);
+                } catch (IOException ignored) {
+                    // Wi-Fi went away meanwhile: let the system pick a route
+                }
+            }
+            s.connect(new InetSocketAddress(ip, PORT), TIMEOUT_MS);
+            return s;
+        } catch (IOException e) {
+            try {
+                s.close();
+            } catch (IOException ignored) {
+                // nothing useful to do
+            }
+            throw e;
+        }
     }
 
     @Override

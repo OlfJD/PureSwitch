@@ -1,6 +1,11 @@
 package com.levi.pureswitch.tuya;
 
-/** The app only ever talks to private (home network) IPv4 addresses. */
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+
+/** The app only ever talks to private (home network) IPv4 addresses, over Wi-Fi. */
 final class LocalNet {
     private LocalNet() {}
 
@@ -18,5 +23,21 @@ final class LocalNet {
         return n[0] == 10
                 || (n[0] == 172 && n[1] >= 16 && n[1] <= 31)
                 || (n[0] == 192 && n[1] == 168);
+    }
+
+    /**
+     * The phone's Wi-Fi network, or null if it isn't on Wi-Fi. Outlet connections are bound to it:
+     * when the Wi-Fi's internet drops, Android makes mobile data the default network, and an
+     * unbound connection to 192.168.x.x would then go out over mobile data and never arrive.
+     */
+    @SuppressWarnings("deprecation") // getAllNetworks: still the simplest way, and works on all versions
+    static Network wifi(Context context) {
+        ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
+        if (cm == null) return null;
+        for (Network n : cm.getAllNetworks()) {
+            NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return n;
+        }
+        return null;
     }
 }

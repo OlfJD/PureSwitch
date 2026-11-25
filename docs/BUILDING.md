@@ -59,9 +59,18 @@ keyAlias=pureswitch
 keyPassword=...
 ```
 
-Then bump `versionCode` and `versionName` in `android/app/build.gradle`, run
-`.\gradlew.bat assembleRelease`, rename `app/build/outputs/apk/release/app-release.apk` to
-`PureSwitch.apk` and attach it to a GitHub release tagged `v<versionName>`.
+Then:
+
+1. `npm test` passes.
+2. Bump `versionCode` and `versionName` in `android/app/build.gradle`.
+3. `.\gradlew.bat assembleRelease`, and rename `app/build/outputs/apk/release/app-release.apk` to
+   `PureSwitch.apk` (no version in the name, so the README's `releases/latest/download/…` link
+   keeps working).
+4. Install **that exact file** on a phone that has the previous release and check it starts and
+   switches.
+5. Get its checksum (`Get-FileHash PureSwitch.apk -Algorithm SHA256`) and put it in the release
+   notes, so people can check their download.
+6. Attach it to a GitHub release tagged `v<versionName>`.
 
 Keep the key and its passwords backed up. An update only installs over an existing install when it
 is signed with the same key.

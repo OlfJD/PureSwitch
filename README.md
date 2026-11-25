@@ -31,7 +31,7 @@ Android 7 or newer, and Wi-Fi plugs, power strips or switches that you use with 
 
 ## Privacy
 
-- No account, no ads, no tracking. Outlet keys are encrypted with the phone's hardware keystore and left out of phone backups.
+- No account, no ads, no tracking. Outlet keys are encrypted with the phone's hardware keystore and left out of phone backups. A diagnostics log of the last two days stays on the phone and is never sent anywhere.
 - Only a device that proves it has an outlet's key gets commands, so a fake device on your Wi-Fi can't take over an outlet.
 - *Connect Smart Life* is the only time PureSwitch goes online. Tuya offers this login only to Home Assistant, so PureSwitch uses Home Assistant's public login ID and Smart Life shows the request as Home Assistant. PureSwitch isn't affiliated with Tuya or Home Assistant. If Tuya ever blocks it, outlets you already added keep working, and *Import key file* takes keys from [tinytuya](https://github.com/jasonacox/tinytuya) instead.
 - Older outlets (protocol 3.3) can't tell a replayed command from a new one. Replaying needs someone who can see your Wi-Fi traffic, which other devices on a normal home Wi-Fi can't.

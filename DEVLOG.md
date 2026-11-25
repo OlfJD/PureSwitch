@@ -1,5 +1,65 @@
 # PureSwitch – Devlog
 
+## 1.1.0 (2026-11-25, not released yet)
+
+The two entries below: fixes for outlets showing "Offline" and switches that silently failed,
+plus the 48-hour diagnostics log and lessons from the other projects. `versionCode` 2.
+
+## 2026-11-25 – Diagnostics log (48 h), and lessons from the other projects
+
+### Diagnostics log
+So a problem at home can be looked at the next day, the app keeps its own log
+(`DiagLog.java`): one file per day in the app's private storage, files older than two days are
+deleted (always at least 48 hours kept), max 256 KB per day. Writing happens on a separate
+low-priority thread; the app only queues a line and never waits.
+
+It records: app start (version, Android, Wi-Fi), Wi-Fi connected/lost, Wi-Fi with/without
+internet, the phone's Wi-Fi address, which network Android uses by default (Wi-Fi / mobile data),
+every outlet read and switch with result, protocol and duration, the real reason behind "Offline"
+(timeout, refused, no route), retries, scans with what they found, taps, confirmations,
+relocations, refresh results and the Smart Life login steps. Never keys, tokens or the user code.
+
+Read it from a debug build (phone connected over USB):
+`adb exec-out run-as com.levi.pureswitch sh -c "cat files/logs/*.log"`.
+The app can also read it (`readLog`), for a future "share log" button in release builds.
+
+### Lessons from `Lessons-from-Blur-AutoClicker.md`
+- **1.3 small capped log:** the diagnostics log above.
+- **1.7 check saved data on load:** saved outlets go through `sanitizeOutlets` (`src/outlets.js`),
+  with all limits in one place; damaged entries are repaired or dropped instead of breaking the app.
+- **1.4 run number:** every switch raises a per-outlet run number; a status reply that was asked
+  for before the switch no longer overwrites the switch's result.
+- **1.10 pure functions with tests:** `src/outlets.js` has no phone or browser code; `npm test`
+  runs `tests/outlets.test.js` (Node's built-in runner, no extra packages).
+- **1.9 release hygiene:** the release steps in `docs/BUILDING.md` now include testing the exact
+  APK and publishing its SHA-256.
+- Not applicable: single-instance locks, file locking, timer resolution, hotkeys (Windows only).
+
+## 2026-11-25 – Outlets showing "Offline", a protected outlet that didn't turn off
+
+### Reported
+Some outlets showed "Offline", and turning off the protected outlet did nothing after confirming.
+The phone's log no longer covered that day, so the causes below come from the code.
+
+### Causes and fixes
+- **A new address went unnoticed.** Routers sometimes give an outlet a new address; the app only
+  found it again on a manual *Scan network*. Now an outlet that doesn't answer is looked for on the
+  Wi-Fi right away (when the app opens or comes back, and when you switch it). If it answers and
+  proves its key there, it moves to that address and the switch is tried once more (`relocate`).
+- **Errors vanished after 4 s.** A failed switch looked like a tap that did nothing, which fits the
+  protected outlet. Errors now stay on the row until the outlet answers again.
+- **Connections could go over mobile data.** When the Wi-Fi's internet drops, Android makes mobile
+  data the default network, and connections to 192.168.x.x went there. Outlet connections and the
+  network scan are now bound to Wi-Fi (`LocalNet.wifi`).
+- **No second try.** A connection that fails at once (Wi-Fi just woke up, plug busy) is now tried
+  once more after 0.7 s. A timeout isn't retried, so a really absent plug doesn't take twice as long.
+- Only one network scan runs at a time (`discoverShared`); scans listen on fixed ports and would
+  block each other.
+
+### Not yet verified
+- Checked on the phone away from home: the outlets show "Offline" and one shared scan runs, no
+  crash. Not yet tried with the real outlets.
+
 ## 2026-11-24 – 1.0.0: public release
 
 ### Security check before going public

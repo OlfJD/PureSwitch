@@ -7,6 +7,9 @@
 // demo never stores them - it only remembers that one was entered (`demoKey`).
 
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { isLocalIPv4 } from './outlets.js';
+
+export { isLocalIPv4 };
 
 const native = Capacitor.isNativePlatform() ? registerPlugin('TuyaLan') : null;
 
@@ -15,14 +18,18 @@ export const isDemo = !native;
 /** Outlet ids that have a key in the native vault. */
 let keyIds = new Set();
 
-// Only private (RFC 1918) IPv4 addresses are allowed, so an outlet can never
-// point at something on the public internet. The native side checks this again.
-export function isLocalIPv4(value) {
-  const m = String(value).match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (!m) return false;
-  const [a, b, c, d] = m.slice(1).map(Number);
-  if ([a, b, c, d].some((n) => n > 255)) return false;
-  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+/**
+ * Adds a line to the diagnostics log (kept on the phone for at least 48 hours, see DiagLog.java).
+ * Fire and forget: never waits, never throws. Never pass keys, tokens or the user code.
+ */
+export function log(message) {
+  if (native) native.log({ message: String(message) }).catch(() => {});
+  else console.debug('[log]', message);
+}
+
+/** The kept diagnostics log as text ('' in the browser demo). */
+export async function readLog() {
+  return native ? (await native.readLog()).text : '';
 }
 
 /**
