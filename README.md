@@ -4,7 +4,9 @@
 
 # PureSwitch
 
-Switch your Smart Life outlets with one tap. Nothing else.
+Switch your Smart Life outlets with one tap. Nothing else. \
+
+The SmartLife App has become a bloated mess, with ads and Ai and wanting to be more than it is. Its slow and annoying. This is just a on/off-switch on your phone. That's it. 
 
 [**Download PureSwitch.apk**](https://github.com/OlfJD/PureSwitch/releases/latest/download/PureSwitch.apk)
 
